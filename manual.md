@@ -1,6 +1,3 @@
-#NOTE: VIEW THE RAW OF THIS FILE FOR THE CORRECT FORMATTING
-
-
 ##------------------Functions:------------------
 
 start             (json_file)
@@ -100,3 +97,5 @@ Using default will overwrite any before loaded variables, as well as start.
 #Note: Time is always in ms
 
 #Note: All functions require all parameters. When not all are given, it may cause errors/problems
+
+#Note: The recents array of an user is saved when saving json, but not loaded with server.start

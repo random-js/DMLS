@@ -44,7 +44,7 @@ class Server {
     console.log(e);
     }
     data.forEach((element) => {
-      accounts[accounts.length] = new User(element.username, element.password, element.data)
+      accounts[accounts.length] = new User(element.username, element.password, element.data, element.state)
     })
   }
 }
@@ -57,13 +57,17 @@ class Recent {
 }
 
 class User {
-  constructor(username, password, data) {
+  constructor(username, password, data, state) {
     this.username = username;
     this.password = password;
     this.data = data;
-    this.state = {
-      locked : false,
-      lockTime : 0
+    if (typeof state == "object") {
+      this.state = state
+    } else {
+      this.state = {
+        locked : false,
+        lockTime : 0
+      }
     }
     this.recent = [];
   }
@@ -199,7 +203,7 @@ function signUp(username, password, data) {
     }
   })
   if (exists == false) {
-    accounts[accounts.length] = new User (username,password,data);
+    accounts[accounts.length] = new User (username,password,data,"no state");
   }
   if (exists == true) {
     return new Return (false, "This username is taken");
