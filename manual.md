@@ -1,3 +1,6 @@
+#NOTE: VIEW THE RAW OF THIS FILE FOR THE CORRECT FORMATTING
+
+
 ##------------------Functions:------------------
 
 start             (json_file)
