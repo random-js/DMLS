@@ -1,0 +1,5 @@
+{
+  "path" : "./test.json",
+  "timeout" : 1800000,
+  "BruteForceLimit": 11
+}

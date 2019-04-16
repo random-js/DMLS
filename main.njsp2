@@ -1,0 +1,417 @@
+//----------------Notices----------------
+
+//DMLS v1.105 [documented]
+//by Ulrich Barnstedt
+
+/*
+Copyright 2019 Ulrich Barnstedt
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+//----------------Variables----------------
+
+const fs = require('fs');
+var µ;
+//var json;
+var serverID;
+var accounts = [];
+var timeout = 1800000; //ms
+var BruteForceTolerance = 11;
+//----------------Classes----------------
+
+class Server {
+  constructor(json, id) {
+    this.json = json;
+    this.id = id;
+    serverID = id;
+    this.connections = [];
+    //this.accounts;
+  }
+  load () {
+    try {
+      var data = JSON.parse(fs.readFileSync(this.json));
+    } catch (e) {
+    console.log(e);
+    }
+    data.forEach((element) => {
+      accounts[accounts.length] = new User(element.username, element.password, element.data)
+    })
+  }
+}
+
+class Recent {
+  constructor(time) {
+    this.time = time+timeout;
+    this.timeout = timeout;
+  }
+}
+
+class User {
+  constructor(username, password, data) {
+    this.username = username;
+    this.password = password;
+    this.data = data;
+    this.state = {
+      locked : false,
+      lockTime : 0
+    }
+    this.recent = [];
+  }
+  changeUsername (username) {
+    this.username = username;
+  }
+  changePassword (password) {
+    this.password = password;
+  }
+  getData () {
+    return this.data;
+  }
+  verify (password) {
+    if (password == this.password) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+}
+
+class Return {
+  constructor(succ,string) {
+    this.succ = succ;
+    this.string = string;
+  }
+  fatal () {
+    if (succ == false) {
+      throw Error (this.string)
+    }
+  }
+}
+//---------------Exports----------------
+
+exports.internal = {
+  start : start,
+  signIn : signIn,
+  signUp : signUp,
+  signOut : signOut,
+  changePassword : changePassword,
+  changeUsername : changeUsername,
+  delUser : delUser,
+  saveJSON : saveJSON,
+  getCr : getCr,
+  configStart : configStart,
+  conc : conc,
+  getState : getState,
+  lock : lock,
+  unlock : unlock,
+  accounts : getAccounts,
+  recent : getRecent,
+  data : data,
+  saveData : saveData
+}
+
+//----------------Functions----------------
+
+function start(json) {
+  µ = new Server (json, "µ");
+  µ.load();
+}
+
+function signIn(username, password) {
+  var exists = false;
+  var legit = false;
+  var loggedIn = false;
+  var lock = false;
+  var user;
+  var lockBruteForce = 0;
+  for (var i = 0; i < µ.connections.length; i++) {
+    if (µ.connections[i].username == username) {
+      loggedIn = true;
+    }
+  };
+  for (var i = 0; i < accounts.length; i++) {
+    if(accounts[i].username == username) {
+      exists = true;
+      lockBruteForce = accounts[i].recent.length;
+      legit = accounts[i].verify(password);
+      if (accounts[i].state.locked == true) {
+        lock = true;
+      } else {
+        lock = false;
+      }
+      user = accounts[i];
+    }
+  }
+  for (var iX = 0; iX < accounts.length; iX++) {
+    for (var i = 0; i < accounts[iX].recent.length; i++) {
+      if(accounts[iX].recent[i] != undefined) {
+        if (accounts[iX].recent[i].time <= Date.now()) {
+          accounts[iX].recent.splice(i, 1);
+        }
+      }
+    }
+  }
+  //console.log("legit: "+legit+" exists: "+exists+" loggedIn: "+loggedIn+" lock: "+lock+" lockBruteForce: "+lockBruteForce);
+  if(legit === false && exists === true && loggedIn == false && lock == false && lockBruteForce < BruteForceTolerance) {
+    for (var i = 0; i < accounts.length; i++) {
+      if (accounts[i].username == username) {
+        accounts[i].recent[parseInt(accounts[i].recent.length)] = new Recent (Date.now());
+        console.log(accounts[i].recent);
+      }
+    }
+  }
+
+  if(legit === true && exists === true && loggedIn == false && (lock == false || lock == 0) && lockBruteForce < BruteForceTolerance && 0 === 0) {
+    µ.connections[µ.connections.length] = user;
+    return new Return (true,"");
+  }
+  if (lockBruteForce >= 10) {
+    return new Return (false, "This user is locked by the brute-force protection")
+  }
+  if (legit == false) {
+    return new Return (false, "Incorrect Password");
+  }
+  if (exists == false) {
+    return new Return (false, "Unknow Username")
+  }
+  if (loggedIn == true) {
+    return new Return (false, "This user is already logged in")
+  }
+  if (lock == true) {
+    return new Return (false, "This user is currently locked. (For "+(((user.state.lockTime-Date.now())/1000)/60).toFixed(4)+" minutes)")
+  }
+}
+
+function signUp(username, password, data) {
+  var exists = false;
+  accounts.forEach((element) => {
+    if (username == element.username) {
+      exists = true;
+    }
+  })
+  if (exists == false) {
+    accounts[accounts.length] = new User (username,password,data);
+  }
+  if (exists == true) {
+    return new Return (false, "This username is taken");
+  } else {
+    return new Return (true, "");
+  }
+}
+
+function signOut(username) {
+  var legit = false;
+  for (var i = 0; i < µ.connections.length; i++) {
+    if (µ.connections[i].username == username) {
+      legit = true;
+      µ.connections.splice(i,1);
+    }
+  }
+  if (legit == true) {
+    return new Return (true, "")
+  } else {
+    return new Return (false, "This user is not logged in.")
+  }
+}
+
+function changePassword(user,newPswd) {
+  var legit = false;
+  accounts.forEach((element) => {
+    if (user == element.username) {
+      legit = true;
+    }
+  })
+  if (legit == true) {
+    for (var i = 0; i < accounts.length; i++) {
+      if(accounts[i].username == user)
+        accounts[i].password == newPswd;
+    }
+  }
+  if (legit == true) {
+    return new Return (true, "")
+  } else {
+    return new Return (false, "This user does not exist")
+  }
+}
+
+function changeUsername(user,newUser) {
+  var count = 0;
+  var legit = false;
+  for (var i = 0; i < accounts.length; i++) {
+    if(accounts[i].username == newUser)
+      count++;
+  }
+  accounts.forEach((element) => {
+    if (element.username == user) {
+      legit = true;
+    }
+  })
+  if (count === 0 && legit == true) {
+    for (var i = 0; i < accounts.length; i++) {
+      if(accounts[i].username == user)
+        accounts[i].username == newUser;
+    }
+    return new Return (true, "")
+  }
+  if (count != 0) {
+    return new Return (false, "This username is already taken")
+  }
+  if (legit == false) {
+    return new Return (false, "This user does not exist")
+  }
+}
+
+function delUser(user) {
+  var legit = false;
+  for (var i = 0; i < accounts.length; i++) {
+    if (accounts[i].username == user) {
+      accounts.splice(i,1);
+      legit = true;
+    }
+  }
+  if (legit == true) {
+    return new Return (true, "")
+  } else {
+    return new Return (false, "This user does not exist.")
+  }
+}
+
+function saveJSON(json) {
+  fs.writeFileSync(json, JSON.stringify(accounts))
+}
+
+function getCr(user) {
+  var elm;
+  accounts.forEach((element) => {
+    if(element.username == user) {
+      elm = {username: element.username, password: element.password};
+    }
+  })
+  return elm;
+}
+
+function configStart(config) {
+  try {
+    var file = JSON.parse(fs.readFileSync(config));
+    start(file.path);
+    timeout = file.timeout;
+    BruteForceTolerance = file.BruteForceLimit;
+    return new Return (true, "")
+  } catch (e) {
+    return new Return (false, "An error occured reading the JSON file.")
+  } finally {
+
+  }
+}
+
+function conc() {
+  return µ.connections;
+}
+
+function getState (user) {
+  var legit = false;
+  for (var i = 0; i < accounts.length; i++) {
+    if (accounts[i].state.locked = user) {
+      legit = true;
+      if (accounts[i].state.lockTime < Date.now()) {
+        return {locked: false, time:accounts[i].state.lockTime}
+        accounts[i].state.locked = false;
+      } else {
+        return {locked: true, time:accounts[i].state.lockTime}
+      }
+    }
+  }
+  if (legit == true) {
+    return new Return (true, "");
+  } else {
+    return new Return (false, "User not found.")
+  }
+}
+
+function lock (user, time) {
+  var legit = false;
+  for (var i = 0; i < accounts.length; i++) {
+    if (accounts[i].username == user) {
+      accounts[i].state.locked = true;
+      accounts[i].state.lockTime = Date.now()+time;
+      legit = true;
+    }
+  }
+  if  (legit == true) {
+    return new Return (true,"");
+  } else {
+    return new Return (false,"User not found");
+  }
+}
+
+function unlock (user) {
+  var legit = false;
+  for (var i = 0; i < accounts.length; i++) {
+    if (accounts[i].username == user) {
+      accounts[i].state.locked = false;
+      accounts[i].state.lockTime = Date.now()-3;
+      legit = true;
+    }
+  }
+  if  (legit == true) {
+    return new Return (true,"");
+  } else {
+    return new Return (false,"User not found");
+  }
+}
+
+function getAccounts () {
+  return accounts;
+}
+
+function getRecent (user) {
+  var legit = false;
+  for (var i = 0; i < accounts.length; i++) {
+    if (accounts[i].username == user) {
+      legit = true;
+      return accounts[i].recent;
+    }
+  }
+  if (legit == true) {
+    return new Return (true, "")
+  } else {
+    return new Return (false, "User not found.")
+  }
+}
+
+function data (user) {
+  for (var i = 0; i < accounts.length; i++) {
+    if (accounts[i].username == user) {
+      return accounts[i].data;
+    }
+  }
+}
+
+function saveData (user, data) {
+  var legit = false;
+  for (var i = 0; i < accounts.length; i++) {
+    if (accounts[i].username == user) {
+      accounts[i].data = data;
+    }
+  }
+  if (legit == true) {
+    return new Return (true, "")
+  } else {
+    return new Return (false, "User not found.")
+  }
+}
+
+/*for (var i = 0; i < accounts.length; i++) {
+  if (accounts[i].username == user) {
+    //code
+  }
+}*/
