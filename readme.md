@@ -14,7 +14,6 @@ The entire system is documented in maunual.md
 All commands/syntaxes are listed there.
 
 @test.json: a json file for testing. You can use it optionally.
-
 @test.js: JS file. Demonstrates how to use the framework;
 -------------------------------------------------------------------------
 
